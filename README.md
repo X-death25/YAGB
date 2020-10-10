@@ -1,6 +1,4 @@
 # YAGB
-You just need a micro USB to USB cable. Plug it and start the software.
-Operating System Compatibility
 Yes Another GameBoy dumper.
 STM32 USB Game Boy / Color cartridge Reader/Writer 
 
