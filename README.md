@@ -2,7 +2,7 @@
 Yes Another GameBoy dumper  
 STM32 USB Game Boy / Color cartridge Reader/Writer 
 
-![YAGB_pcb](https://i.imgur.com/MoXt7N4.png)
+![YAGB_pcb](https://i.imgur.com/MoXt7N4.png) ![YAGB_pcb2](https://i.imgur.com/BBcMD9S.jpg)  
 
 
 What is it ?
