@@ -126,7 +126,7 @@ int main()
    * will need to use libusb_get_device_list() instead. Refer to the libusb
    * documentation for details. */
 
-  handle = libusb_open_device_with_vid_pid(0, 0x0483, 0x5740);
+  handle = libusb_open_device_with_vid_pid(0, 0x1209, 0xBEBA);
 
   if (!handle)
   {
