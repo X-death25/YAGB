@@ -17,7 +17,7 @@ LDSCRIPT   = $(LIBPATHS)/lib/stm32/f1/stm32f103x8.ld
 LDFLAGS    = -T $(LDSCRIPT)  -L$(LIBPATHS)/lib -lopencm3_stm32f1 --static -nostartfiles -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs
 LIBOPENCM3 = $(LIBPATHS)/lib/libopencm3_stm32f1.a
 
-APP_ADDRESS = 0x08002000 
+APP_ADDRESS = 0x08000800 
 
 .PHONY: all clean flash burn hex bin
 
