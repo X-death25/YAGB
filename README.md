@@ -38,7 +38,7 @@ Microsoft Windows XP / 7 / 8 / 10 / Linux / MAC OS
 What make it special ?
 -----
 
-Hardware & Software is open source so you can do what you want :) you can also use it for reflash your own flash card with some custom hardware feature.
+I wanted to use only classic component for the hardware easy findable on the net. Board microprocessor uses its own native USB transfer protocol so it's fast even for the large games, no need for any extra USB transceiver. I have made the choice to have fully open source hardware & software parts. All of the part list is easy to solder, even for a complete beginner, so everyone can make it. You can also buy a ready to use dumper.
 
 Where i can buy it ?
 -----
