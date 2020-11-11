@@ -43,4 +43,4 @@ Hardware & Software is open source so you can do what you want :) you can also u
 Where i can buy it ?
 -----
 
-Coming soon on Tindie
+https://www.tindie.com/products/xdeath/yagb-yes-another-gameboy-dumper/
