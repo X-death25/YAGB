@@ -22,7 +22,7 @@
 
 // Specific Win32 lib ( only used for debug )
 
-#include <conio.h>
+//#include <conio.h>
 
 // USB Special Command
 
@@ -33,13 +33,14 @@
 #define WRITE_GB_SAVE 0x13
 #define WRITE_GB_FLASH 	0x14
 #define ERASE_GB_FLASH 0x15
+#define ERASE_SECTOR 0x16
 #define INFOS_ID 0x18
 #define DEBUG_MODE 0x19
 
 // Version 
 
 #define MAX_VERSION 	1
-#define MIN_VERSION 	0
+#define MIN_VERSION 	1
 
 
 // Sega Dumper Specific Function
@@ -74,9 +75,11 @@ int main()
 
     unsigned long i=0;
 	unsigned long j=0;
+    unsigned long k=0;
 	int choixMenu=0;
 	unsigned long address=0;
 	unsigned char *BufferROM;
+	unsigned char *BufferTemp;
 	unsigned char *BufferRAM;
 	unsigned char *buffer_save = NULL;
 	char dump_name[64];
@@ -86,15 +89,24 @@ int main()
 	const char * wheel[] = { "-","\\","|","/"}; //erase wheel
 	unsigned char manufacturer_id=0;
 	unsigned char chip_id=0;
+	unsigned short flash_id=0;
+	unsigned short sector_number=0;
 
   // Rom Header info
 
+	unsigned char ROM_Logo[48];
     unsigned char Game_Name[16];
 	unsigned char Rom_Type=0;
     unsigned long Rom_Size=0;
 	unsigned long Ram_Size=0;
 	unsigned char CGB=0;
 	unsigned char SGB=0;
+
+const unsigned char GB_Logo[48] = {
+	0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 
+	0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 
+	0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 
+};
    
 
    // Main Program   
@@ -158,7 +170,7 @@ int main()
  printf("Reading cartridge...\n");
 
 
- // At this step we can try to read the buffer wake up Sega Dumper
+ // At this step we can try to read the buffer wake up GB Dumper
 
   usb_buffer_out[0] = WAKEUP;// Affect request to  WakeUP Command
 
@@ -181,6 +193,46 @@ libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numByt
       usb_buffer_out[i]=0x00;
 	}
 
+// Now try to detect cartridge type : GB or GBA or Empty
+
+printf("\nTry to read cartridge type ...\n");
+
+address=260;
+game_size=260+64;
+usb_buffer_out[0] = READ_GB;
+usb_buffer_out[1] = address & 0xFF ;
+usb_buffer_out[2] = (address & 0xFF00)>>8;
+usb_buffer_out[3]=(address & 0xFF0000)>>16;
+usb_buffer_out[5]=game_size & 0xFF;
+usb_buffer_out[6]=(game_size & 0xFF00)>>8;
+usb_buffer_out[7]=(game_size & 0xFF0000)>>16;
+usb_buffer_out[4] = 0; // Slow Mode
+libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
+libusb_bulk_transfer(handle, 0x82,usb_buffer_in,64, &numBytes, 60000);
+
+for (i = 0; i < 48; i++)
+    {
+        ROM_Logo [i] = usb_buffer_in[i];
+		
+    }
+
+if(memcmp((unsigned char *)ROM_Logo,(unsigned char *)GB_Logo,48) == 0)
+	{
+		printf("Nintendo GameBoy cartridge detected !");
+	}
+else {printf("Bad header , cartridge dirty or empty Flash ROM");}
+
+
+/*
+printf("\nDisplaying USB IN buffer\n\n");
+
+   for (i = 0; i < 64; i++)
+    {
+        printf("%02X ",usb_buffer_in[i]);
+		j++;
+		if (j==16){printf("\n");j=0;}
+    }
+*/
 
 // Now try to read ROM GB Header
 
@@ -208,7 +260,7 @@ printf("\nDisplaying USB IN buffer\n\n");
 		if (j==16){printf("\n");j=0;}
     }
 */
-printf("\nReading ROM Header...  ");
+printf("\nReading ROM Header...\n");
 printf("\nGame Title : ");
 for (i=0; i<16; i++) {Game_Name[i]=usb_buffer_in[i];} // ROM Name
 printf("%.*s",16,(char *) Game_Name);
@@ -260,7 +312,54 @@ if ( CGB  == 0xC0){ printf("\nGame only works on GameBoy Color");}
 else { printf("\nGameBoy / GameBoy Color compatible game");}
 SGB = usb_buffer_in[18];
 if ( SGB  == 0x00){ printf("\nNo Super GameBoy enhancements");}
-if ( SGB  == 0x03){ printf("\nGame have Super GameBoy function");}
+if ( SGB  == 0x03){ printf("\nGame have Super GameBoy enhancements");}
+
+// MBC5 custom inits
+
+
+// Clean Buffer
+  for (i = 0; i < 64; i++)
+    {
+      usb_buffer_in[i]=0x00;
+      usb_buffer_out[i]=0x00;
+	}
+/*
+if (Rom_Type == 0x19 || 0x1A || 0x1B || 0x1C || 0x1D || 0x1E)
+{printf("\nMBC5 detected please wait until init is completed ...\n");
+address=0;
+game_size = Rom_Size;
+usb_buffer_out[0] = READ_GB;           				
+usb_buffer_out[1]=address & 0xFF;
+usb_buffer_out[2]=(address & 0xFF00)>>8;
+usb_buffer_out[3]=(address & 0xFF0000)>>16;
+usb_buffer_out[4]=0;
+usb_buffer_out[5]=game_size & 0xFF;
+usb_buffer_out[6]=(game_size & 0xFF00)>>8;
+usb_buffer_out[7]=(game_size & 0xFF0000)>>16;
+usb_buffer_out[8]=Rom_Type;
+BufferTemp = (unsigned char*)malloc(game_size); 
+     for (i=0; i<game_size; i++)
+        {
+            BufferTemp[i]=0x00;
+        }			
+
+
+						libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
+						res = libusb_bulk_transfer(handle, 0x82,BufferTemp,game_size*2 , &numBytes, 60000);
+  							if (res != 0)
+  								{
+    								printf("Error \n");
+    								return 1;
+  								}     
+ 						printf("MBC5 init completed sucessfully !\n");}
+*/
+
+// Clean Buffer
+  for (i = 0; i < 64; i++)
+    {
+      usb_buffer_in[i]=0x00;
+      usb_buffer_out[i]=0x00;
+	}
 	
 printf("\n\n --- MENU ---\n");
 printf(" 1) Dump GB ROM\n");
@@ -269,6 +368,7 @@ printf(" 3) Write GB Save\n");
 printf(" 4) Erase GB Save\n"); 
 printf(" 5) Write GB Flash\n");
 printf(" 6) Erase GB Flash\n");
+printf(" 7) Flash Sector Erase\n");
 printf(" 8) Flash Memory Detection \n");
 printf(" 0) Debug\n"); 
 
@@ -293,12 +393,12 @@ case 1: // READ GB ROM
 						game_size *= 1024;
 					}
 					else {game_size = Rom_Size; }
-						    
+				if (Rom_Type == 0x19 || 0x1A || 0x1B || 0x1C || 0x1D || 0x1E){game_size=game_size*2;}		    
 				printf("Sending command Dump ROM \n");
         		printf("Dumping please wait ...\n");
 				address=0;
-				printf("\nRom Size : %ld Ko \n",game_size/1024);
-				BufferROM = (unsigned char*)malloc(game_size);
+				if (Rom_Type == 0x19 || 0x1A || 0x1B || 0x1C || 0x1D || 0x1E){printf("\nRom Size : %ld Ko \n",game_size/1024/2);}
+				else{printf("\nRom Size : %ld Ko \n",game_size/1024);}
         // Cleaning Buffer
    
 // Cleaning ROM Buffer
@@ -334,7 +434,8 @@ BufferROM = (unsigned char*)malloc(game_size);
  						printf("\nDump ROM completed !\n");
 						if ( CGB  == 0xC0){myfile = fopen("dump_gbc.gbc","wb");}
          				else {myfile = fopen("dump_gb.gb","wb");}
-        				fwrite(BufferROM, 1,game_size, myfile);
+						if (Rom_Type == 0x19 || 0x1A || 0x1B || 0x1C || 0x1D || 0x1E){fwrite(BufferROM+game_size/2,1,game_size/2, myfile);}
+						else {fwrite(BufferROM, 1,game_size, myfile);}
        					fclose(myfile);
  break;
 
@@ -394,7 +495,6 @@ libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBy
 
  case 3:  // WRITE SRAM
 
-        printf(" ALL DATAS WILL BE ERASED BEFORE ANY WRITE!\n");
         printf(" Save file: ");
         scanf("%60s", dump_name);
         myfile = fopen(dump_name,"rb");
@@ -405,28 +505,11 @@ libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBy
         fread(buffer_save, 1, save_size, myfile);
         fclose(myfile);
 
-        // Erase SRAM
-
-        		printf("Erasing GB Save...");
-        	    usb_buffer_out[0] = ERASE_GB_SAVE;
-			    usb_buffer_out[4] = 0; // Slow Mode
-				usb_buffer_out[5] = 0; // Bank Number
-				usb_buffer_out[6] = Rom_Type; // Rom_Type
-				usb_buffer_in[7] = 0x00;
-
-				libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
-        while ( usb_buffer_in[7] != 0xAA)
-        {
-            libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000);
-        }
-
-        printf("SRAM Sucessfully Erased ...\n");
-
         // Write SRAM
 
         i=0;
         j=0;
-		unsigned long k=0;
+		k=0;
         address=0;
         while ( j < save_size)
         {
@@ -437,7 +520,7 @@ libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBy
                 k++;
             }
             i=0;
-            j+=64;
+            j+=32;
             usb_buffer_out[0] = WRITE_GB_SAVE; // Select write in 8bit Mode
             usb_buffer_out[1]=address & 0xFF;
             usb_buffer_out[2]=(address & 0xFF00)>>8;
@@ -460,20 +543,94 @@ case 4: // Erase GB SAVE
  
     			choixMenu=0;
 				printf("Erasing GB Save...");
-        	    usb_buffer_out[0] = ERASE_GB_SAVE;
-			    usb_buffer_out[4] = 0; // Slow Mode
-				usb_buffer_out[5] = 0; // Bank Number
-				usb_buffer_out[6] = Rom_Type; // Rom_Type
-
-				libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
-        while ( usb_buffer_in[7] != 0xAA)
+				buffer_save = (unsigned char*)malloc(1024*32);
+				i=0;
+				// Cleaning buffer save
+            	for (i=0; i<1024*32; i++)
+            		{
+                		buffer_save[i] = 0xFF;         
+            		}
+				 i=0;
+        j=0;
+		k=0;
+        address=0;
+        while ( j < 1024*32)
         {
-            libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000);
+            // Fill usb out buffer with save data
+            for (i=32; i<64; i++)
+            {
+                usb_buffer_out[i] = buffer_save[k];
+                k++;
+            }
+            i=0;
+            j+=32;
+            usb_buffer_out[0] = WRITE_GB_SAVE; // Select write in 8bit Mode
+            usb_buffer_out[1]=address & 0xFF;
+            usb_buffer_out[2]=(address & 0xFF00)>>8;
+            usb_buffer_out[3]=(address & 0xFF0000)>>16;
+            usb_buffer_out[7] = 0x00;
+            libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
+            while ( usb_buffer_in[7] != 0xAA)
+            {
+                libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000);
+            }
+            address+=32;
         }
-
-        printf("SRAM Sucessfully Erased ...\n");
+        	    
+        printf("\nSRAM Sucessfully Erased ...\n");
 
 				break;
+
+ case 5: //WRITE FLASH
+
+		// Sending ROM to Buffer
+
+		printf(" Enter ROM file: ");
+        scanf("%60s", dump_name);
+        myfile = fopen(dump_name,"rb");
+        fseek(myfile,0,SEEK_END);
+        game_size = ftell(myfile);
+        BufferROM = (unsigned char*)malloc(game_size);
+        rewind(myfile);
+        fread(BufferROM, 1, game_size, myfile);
+        fclose(myfile);
+
+        i=0;
+        address = 0;
+    	j=0;
+		k=0;
+
+		printf("Writing Flash please wait ...\n");
+   
+ 		// Fill usb out buffer with ROM data
+
+    while ( j < game_size)
+        {
+          
+            for (i=32; i<64; i++)
+            {
+                usb_buffer_out[i] = BufferROM[k];
+                k++;
+            }
+            i=0;
+            j+=32;
+
+            usb_buffer_out[0] = WRITE_GB_FLASH; // Select write in 8bit Mode
+            usb_buffer_out[1]=address & 0xFF;
+            usb_buffer_out[2]=(address & 0xFF00)>>8;
+            usb_buffer_out[3]=(address & 0xFF0000)>>16;
+            usb_buffer_out[7] = 0x00;
+			usb_buffer_out[8]=0x1A;
+            libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
+            while ( usb_buffer_in[7] != 0xAA)
+            {
+                libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000);
+            }
+            address+=32;
+        }
+
+        printf("Flash Sucessfully Writted ...\n");
+		break;
 
  case 6: //ERASE FLASH
 
@@ -496,17 +653,44 @@ case 4: // Erase GB SAVE
         fflush(stdout);
 
         break;
+
+case 7: //ERASE Sector Test
+
+		printf(" Enter sector number to erase : \n ");
+        scanf("%d", &sector_number);
+		usb_buffer_out[0] = ERASE_SECTOR;
+		usb_buffer_out[1] = sector_number;
+		libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
+		libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000); 
+		while ( usb_buffer_in[7] != 0xAA)
+            {
+                libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000);
+            }
+		printf("Sector Erased sucesfully \n");
+		break;		
+	    
+
 case 8: // Vendor / ID Info
 
 
-						printf("Detecting Flash...\n");
+						//printf("Detecting Flash...\n");
+						printf("Try to Detect AMD compatible Flash...\n");
 						usb_buffer_out[0] = INFOS_ID;
+						usb_buffer_out[1] = 0x01;  // AMD Manufacturer ID
 						libusb_bulk_transfer(handle, 0x01,usb_buffer_out, sizeof(usb_buffer_out), &numBytes, 60000);
 						libusb_bulk_transfer(handle, 0x82, usb_buffer_in, sizeof(usb_buffer_in), &numBytes, 6000); 
 						manufacturer_id = usb_buffer_in[1];
 						chip_id = usb_buffer_in[3];
-						printf("Manufacturer ID : %02X \n",usb_buffer_in[1]);
+						printf("Manufacturer ID : %02X    ",usb_buffer_in[1]);
 						printf("Chip ID : %02X \n",usb_buffer_in[3]);
+						flash_id = (manufacturer_id<<8) | chip_id;
+						//printf("Flash ID : %04X \n",flash_id);
+						switch(flash_id)
+						  {
+								case 0x01AD :   printf("Memory : AM29F016 \n");printf("Capacity : 16Mb \n");break;
+								case 0x0141 :   printf("Memory : AM29F032 \n");printf("Capacity : 32Mb \n");break;
+								default : 		printf("No AMD or compatible Flash detected \n");			break;
+                          }
 						scanf("%d");
 								
 						break; 
