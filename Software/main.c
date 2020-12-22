@@ -40,7 +40,7 @@
 // Version 
 
 #define MAX_VERSION 	1
-#define MIN_VERSION 	1
+#define MIN_VERSION 	2
 
 
 // Sega Dumper Specific Function
